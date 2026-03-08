@@ -164,3 +164,43 @@ class TestYouTubeAudio:
         run_cli("youtube", "--force", VIDEO_URL)
         audio_files = list(folder.glob("audio.*"))
         assert audio_files[0].stat().st_mtime > first_mtime
+
+
+class TestYouTubeVideo:
+    """Test video download (opt-in with --video)."""
+
+    def test_video_not_downloaded_by_default(self):
+        run_cli("youtube", "--no-audio", VIDEO_URL)
+        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
+        video_files = list(folder.glob("video.*"))
+        assert len(video_files) == 0
+
+    def test_video_file_downloaded(self):
+        data = run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
+        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
+        video_files = list(folder.glob("video.*"))
+        assert len(video_files) == 1, f"Expected 1 video file, found: {video_files}"
+
+    def test_video_file_has_content(self):
+        run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
+        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
+        video_files = list(folder.glob("video.*"))
+        assert video_files[0].stat().st_size > 1000, "Video file is suspiciously small"
+
+    def test_video_file_name_in_output(self):
+        data = run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
+        assert "video_file" in data
+        assert data["video_file"].startswith("video.")
+
+    def test_video_cached_on_second_run(self):
+        run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
+        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
+        video_files = list(folder.glob("video.*"))
+        first_mtime = video_files[0].stat().st_mtime
+        run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
+        assert video_files[0].stat().st_mtime == first_mtime
+
+    def test_video_with_audio(self):
+        data = run_cli("youtube", "--video", VIDEO_URL)
+        assert "video_file" in data
+        assert "audio_file" in data

@@ -17,6 +17,7 @@ def main():
     yt_parser.add_argument("url", help="YouTube video URL")
     yt_parser.add_argument("--force", action="store_true", help="Bypass cache")
     yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
+    yt_parser.add_argument("--video", action="store_true", help="Download video (480p max)")
 
     args = parser.parse_args()
     if not args.command:
@@ -53,6 +54,12 @@ def _handle_youtube(args, config):
         content_id = metadata_dict["content_id"]
         audio_path = youtube.download_audio(content_id, args.url, config, force=args.force)
         metadata_dict["audio_file"] = audio_path.name
+
+    # Download video if requested
+    if args.video:
+        content_id = metadata_dict["content_id"]
+        video_path = youtube.download_video(content_id, args.url, config, force=args.force)
+        metadata_dict["video_file"] = video_path.name
 
     # Output JSON to stdout
     print(json.dumps(metadata_dict, indent=2))

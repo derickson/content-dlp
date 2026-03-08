@@ -90,7 +90,7 @@ def download_audio(content_id: str, url: str, config: dict, force: bool = False)
         "outtmpl": str(folder / "audio.%(ext)s"),
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
-            "preferredcodec": "opus",
+            "preferredcodec": "mp3",
         }],
     }
 
@@ -104,10 +104,50 @@ def download_audio(content_id: str, url: str, config: dict, force: bool = False)
     return audio_path
 
 
+def download_video(content_id: str, url: str, config: dict, force: bool = False) -> Path:
+    """Download video at low resolution (480p max). Returns path to video file."""
+    download_dir = config["download_dir"]
+    folder = content_dir(download_dir, content_id)
+
+    if not force:
+        existing = _find_video_file(folder)
+        if existing:
+            print("Video already downloaded.", file=sys.stderr)
+            return existing
+
+    print("Downloading video (480p max)...", file=sys.stderr)
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "logger": _ydl_logger(),
+        "format": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+        "outtmpl": str(folder / "video.%(ext)s"),
+        "merge_output_format": "mp4",
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+    video_path = _find_video_file(folder)
+    if not video_path:
+        raise RuntimeError("Video download completed but no video file found")
+    print(f"Video saved: {video_path.name}", file=sys.stderr)
+    return video_path
+
+
 def _find_audio_file(folder: Path) -> Path | None:
     """Find the audio file in a content folder."""
-    for ext in ("opus", "m4a", "webm", "mp3", "ogg"):
+    for ext in ("mp3", "m4a", "webm", "opus", "ogg"):
         path = folder / f"audio.{ext}"
+        if path.exists():
+            return path
+    return None
+
+
+def _find_video_file(folder: Path) -> Path | None:
+    """Find the video file in a content folder."""
+    for ext in ("mp4", "mkv", "webm"):
+        path = folder / f"video.{ext}"
         if path.exists():
             return path
     return None
