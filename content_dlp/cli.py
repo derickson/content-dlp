@@ -18,6 +18,7 @@ def main():
     yt_parser.add_argument("--force", action="store_true", help="Bypass cache")
     yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
     yt_parser.add_argument("--video", action="store_true", help="Download video (480p max)")
+    yt_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via whisper service")
 
     args = parser.parse_args()
     if not args.command:
@@ -54,6 +55,17 @@ def _handle_youtube(args, config):
         content_id = metadata_dict["content_id"]
         audio_path = youtube.download_audio(content_id, args.url, config, force=args.force)
         metadata_dict["audio_file"] = audio_path.name
+
+    # Transcribe audio if requested
+    if args.transcript:
+        if args.no_audio:
+            print("Error: --transcript requires audio (cannot use with --no-audio)", file=sys.stderr)
+            sys.exit(1)
+        from .transcribe import transcribe
+        content_id = metadata_dict["content_id"]
+        folder = content_dir(config["download_dir"], content_id)
+        transcript = transcribe(audio_path, folder, force=args.force)
+        metadata_dict["transcript"] = transcript
 
     # Download video if requested
     if args.video:
