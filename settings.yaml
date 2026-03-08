@@ -1,0 +1,4 @@
+download_dir: ~/dev/content-dlp/content-dlp-data
+
+youtube:
+  ytdlp_path: null

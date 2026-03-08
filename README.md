@@ -11,6 +11,9 @@ Requires Python 3.12+ and ffmpeg.
 uv venv ~/.venvs/content-dlp
 uv pip install yt-dlp pyyaml
 
+# Symlink .venv to the shared venv location
+ln -s ~/.venvs/content-dlp .venv
+
 # Make the wrapper executable
 chmod +x content-dlp
 ```
