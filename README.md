@@ -9,7 +9,7 @@ Requires Python 3.12+ and ffmpeg. Transcript feature requires a GPU whisper serv
 ```bash
 # Create venv and install
 uv venv ~/.venvs/content-dlp
-uv pip install yt-dlp pyyaml podcastparser requests
+uv pip install -e .
 
 # Symlink .venv to the shared venv location
 ln -s ~/.venvs/content-dlp .venv

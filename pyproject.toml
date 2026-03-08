@@ -8,6 +8,7 @@ dependencies = [
     "yt-dlp",
     "pyyaml",
     "podcastparser",
+    "requests",
 ]
 
 [project.scripts]
