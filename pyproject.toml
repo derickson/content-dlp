@@ -1,0 +1,13 @@
+[project]
+name = "content-dlp"
+version = "0.1.0"
+description = "CLI tool for AI agents to harvest context from web sources"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "yt-dlp",
+    "pyyaml",
+]
+
+[project.scripts]
+content-dlp = "content_dlp.cli:main"
