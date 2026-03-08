@@ -9,6 +9,10 @@ DEFAULTS = {
     "podcast": {
         "user_agent": "content-dlp/0.1",
     },
+    "webscrape": {
+        "jina_api_key": None,
+        "timeout": 30,
+    },
 }
 
 SETTINGS_PATH = Path(__file__).parent.parent / "settings.yaml"

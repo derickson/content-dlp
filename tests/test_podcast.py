@@ -1,12 +1,9 @@
 """Integration test: fetch a real podcast RSS feed and validate the returned metadata."""
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
 
 # NPR Planet Money — stable, long-running public feed
 FEED_URL = "https://feeds.npr.org/510289/podcast.xml"
@@ -14,13 +11,6 @@ FEED_URL = "https://feeds.npr.org/510289/podcast.xml"
 PYTHON = sys.executable
 TEST_DOWNLOAD_DIR = Path(__file__).parent / "test_output"
 
-
-@pytest.fixture(autouse=True)
-def clean_test_output():
-    """Remove test output dir before each test (keep after for inspection)."""
-    if TEST_DOWNLOAD_DIR.exists():
-        shutil.rmtree(TEST_DOWNLOAD_DIR)
-    yield
 
 
 def run_cli(*args: str, timeout: int = 120) -> list[dict]:
@@ -129,3 +119,32 @@ class TestPodcastAudio:
         # Second run should reuse cached audio
         run_cli("podcast", FEED_URL)
         assert audio_files[0].stat().st_mtime == first_mtime
+
+
+class TestPodcastTranscript:
+    """Test transcript generation via whisper service."""
+
+    def test_transcript_in_output(self):
+        data = run_cli("podcast", "--transcript", FEED_URL, timeout=900)
+        assert "transcript" in data[0]
+        assert "text" in data[0]["transcript"]
+        assert len(data[0]["transcript"]["text"]) > 100
+
+    def test_transcript_cached_on_second_run(self):
+        data = run_cli("podcast", "--transcript", FEED_URL, timeout=900)
+        folder = TEST_DOWNLOAD_DIR / data[0]["content_id"]
+        assert (folder / "transcript.json").exists()
+        first_mtime = (folder / "transcript.json").stat().st_mtime
+        run_cli("podcast", "--transcript", FEED_URL, timeout=900)
+        assert (folder / "transcript.json").stat().st_mtime == first_mtime
+
+    def test_transcript_requires_audio(self):
+        result = subprocess.run(
+            [PYTHON, "-m", "content_dlp", "--download-dir", str(TEST_DOWNLOAD_DIR),
+             "podcast", "--transcript", "--no-audio", FEED_URL],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent,
+            timeout=120,
+        )
+        assert result.returncode != 0

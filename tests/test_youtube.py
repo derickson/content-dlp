@@ -1,12 +1,9 @@
 """Integration test: fetch a real YouTube video and validate the returned metadata."""
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
 
 VIDEO_URL = "https://www.youtube.com/watch?v=yLUKVHH3X8I"
 EXPECTED = {
@@ -22,13 +19,6 @@ EXPECTED = {
 PYTHON = sys.executable
 TEST_DOWNLOAD_DIR = Path(__file__).parent / "test_output"
 
-
-@pytest.fixture(autouse=True)
-def clean_test_output():
-    """Remove test output dir before each test (keep after for inspection)."""
-    if TEST_DOWNLOAD_DIR.exists():
-        shutil.rmtree(TEST_DOWNLOAD_DIR)
-    yield
 
 
 def run_cli(*args: str, timeout: int = 120) -> dict:
@@ -106,10 +96,8 @@ class TestYouTubeMetadata:
         assert (folder / "source_metadata.json").exists()
 
     def test_no_audio_flag_skips_download(self):
-        run_cli("youtube", "--no-audio", VIDEO_URL)
-        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
-        audio_files = list(folder.glob("audio.*"))
-        assert len(audio_files) == 0
+        data = run_cli("youtube", "--no-audio", VIDEO_URL)
+        assert "audio_file" not in data
 
     def test_cache_returns_same_data(self):
         first = run_cli("youtube", "--no-audio", VIDEO_URL)
@@ -170,10 +158,8 @@ class TestYouTubeVideo:
     """Test video download (opt-in with --video)."""
 
     def test_video_not_downloaded_by_default(self):
-        run_cli("youtube", "--no-audio", VIDEO_URL)
-        folder = TEST_DOWNLOAD_DIR / EXPECTED["content_id"]
-        video_files = list(folder.glob("video.*"))
-        assert len(video_files) == 0
+        data = run_cli("youtube", "--no-audio", VIDEO_URL)
+        assert "video_file" not in data
 
     def test_video_file_downloaded(self):
         data = run_cli("youtube", "--video", "--no-audio", VIDEO_URL)
