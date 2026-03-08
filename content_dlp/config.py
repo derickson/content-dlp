@@ -6,6 +6,9 @@ DEFAULTS = {
     "youtube": {
         "ytdlp_path": None,
     },
+    "podcast": {
+        "user_agent": "content-dlp/0.1",
+    },
 }
 
 SETTINGS_PATH = Path(__file__).parent.parent / "settings.yaml"

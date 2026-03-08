@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 from .cache import content_dir, is_cached
 from .config import load_config
-from .sources import youtube
+from .sources import youtube, podcast
 
 
 def main():
@@ -18,6 +18,12 @@ def main():
     yt_parser.add_argument("--force", action="store_true", help="Bypass cache")
     yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
 
+    pod_parser = sub.add_parser("podcast", help="Fetch podcast episode metadata and audio from RSS feed")
+    pod_parser.add_argument("url", help="Podcast RSS feed URL")
+    pod_parser.add_argument("--episodes", type=int, default=1, help="Number of recent episodes (default: 1)")
+    pod_parser.add_argument("--force", action="store_true", help="Bypass cache")
+    pod_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -29,6 +35,8 @@ def main():
 
     if args.command == "youtube":
         _handle_youtube(args, config)
+    elif args.command == "podcast":
+        _handle_podcast(args, config)
 
 
 def _handle_youtube(args, config):
@@ -65,6 +73,28 @@ def _fetch_and_save(url: str, config: dict) -> dict:
     with open(folder / "metadata.json", "w") as f:
         json.dump(metadata_dict, f, indent=2)
     return metadata_dict
+
+
+def _handle_podcast(args, config):
+    episodes = []
+    # Always need to parse feed to discover episodes (can't do pre-fetch cache)
+    metadata_list = podcast.fetch(args.url, config, num_episodes=args.episodes)
+
+    for metadata in metadata_list:
+        metadata_dict = asdict(metadata)
+
+        if not args.no_audio:
+            enclosure_url = metadata.extras.get("enclosure_url", "")
+            mime_type = metadata.extras.get("enclosure_mime_type", "")
+            if enclosure_url:
+                audio_path = podcast.download_audio(
+                    metadata.content_id, enclosure_url, mime_type, config, force=args.force
+                )
+                metadata_dict["audio_file"] = audio_path.name
+
+        episodes.append(metadata_dict)
+
+    print(json.dumps(episodes, indent=2))
 
 
 def _extract_video_id(url: str) -> str | None:
