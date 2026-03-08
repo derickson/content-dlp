@@ -9,28 +9,60 @@ from .sources import youtube, podcast, webscrape
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="content-dlp", description="Harvest context from web sources")
-    parser.add_argument("--download-dir", help="Override download directory")
-    sub = parser.add_subparsers(dest="command")
+    parser = argparse.ArgumentParser(
+        prog="content-dlp",
+        description="Harvest normalized metadata, audio, video, and transcripts from web sources for AI agents.",
+        epilog="""examples:
+  %(prog)s youtube "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  %(prog)s youtube --no-audio "https://www.youtube.com/watch?v=VIDEO_ID"
+  %(prog)s youtube --video --transcript "https://www.youtube.com/watch?v=VIDEO_ID"
+  %(prog)s podcast "https://feeds.example.com/podcast.xml"
+  %(prog)s podcast --episodes 3 --no-audio "https://feeds.example.com/podcast.xml"
+  %(prog)s webscrape "https://example.com/page"
 
-    yt_parser = sub.add_parser("youtube", help="Fetch YouTube video metadata and audio")
-    yt_parser.add_argument("url", help="YouTube video URL")
-    yt_parser.add_argument("--force", action="store_true", help="Bypass cache")
-    yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
-    yt_parser.add_argument("--video", action="store_true", help="Download video (480p max)")
-    yt_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via whisper service")
+output:
+  JSON is printed to stdout; status messages go to stderr.
+  Pipe into jq for field extraction: %(prog)s youtube URL | jq .title
 
-    pod_parser = sub.add_parser("podcast", help="Fetch podcast episode metadata and audio from RSS feed")
+caching:
+  Results are cached in ~/content-dlp-data/ by content ID.
+  Use --force on any subcommand to bypass the cache and re-fetch.
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--download-dir", help="Override download directory (default: ~/content-dlp-data)")
+    sub = parser.add_subparsers(dest="command", title="sources", metavar="SOURCE")
+
+    yt_parser = sub.add_parser(
+        "youtube",
+        help="YouTube video — metadata, audio, video, transcript",
+        description="Fetch metadata and optionally download audio, video, or transcript for a YouTube video.",
+    )
+    yt_parser.add_argument("url", help="YouTube video URL (youtube.com/watch?v= or youtu.be/ links)")
+    yt_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch everything")
+    yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download (metadata only)")
+    yt_parser.add_argument("--video", action="store_true", help="Download video (480p max, mp4)")
+    yt_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via GPU whisper service (requires audio)")
+
+    pod_parser = sub.add_parser(
+        "podcast",
+        help="Podcast RSS — episode metadata, audio, transcript",
+        description="Parse a podcast RSS feed and fetch metadata/audio for recent episodes.",
+    )
     pod_parser.add_argument("url", help="Podcast RSS feed URL")
-    pod_parser.add_argument("--episodes", type=int, default=1, help="Number of recent episodes (default: 1)")
-    pod_parser.add_argument("--force", action="store_true", help="Bypass cache")
-    pod_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
-    pod_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via whisper service")
+    pod_parser.add_argument("--episodes", type=int, default=1, help="Number of most recent episodes to fetch (default: 1)")
+    pod_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch everything")
+    pod_parser.add_argument("--no-audio", action="store_true", help="Skip audio download (metadata only)")
+    pod_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via GPU whisper service (requires audio)")
 
-    ws_parser = sub.add_parser("webscrape", help="Scrape a web page")
-    ws_parser.add_argument("url", help="URL to scrape")
-    ws_parser.add_argument("--force", action="store_true", help="Bypass cache")
-    ws_parser.add_argument("--no-content", action="store_true", help="Skip saving markdown")
+    ws_parser = sub.add_parser(
+        "webscrape",
+        help="Web page — content as markdown",
+        description="Scrape a web page and save its content as markdown via Jina Reader API.",
+    )
+    ws_parser.add_argument("url", help="URL of the page to scrape")
+    ws_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch")
+    ws_parser.add_argument("--no-content", action="store_true", help="Skip saving page markdown (metadata only)")
 
     args = parser.parse_args()
     if not args.command:
