@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 from .cache import content_dir, is_cached
 from .config import load_config
-from .sources import youtube
+from .sources import youtube, webscrape
 
 
 def main():
@@ -18,6 +18,11 @@ def main():
     yt_parser.add_argument("--force", action="store_true", help="Bypass cache")
     yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download")
 
+    ws_parser = sub.add_parser("webscrape", help="Scrape a web page")
+    ws_parser.add_argument("url", help="URL to scrape")
+    ws_parser.add_argument("--force", action="store_true", help="Bypass cache")
+    ws_parser.add_argument("--no-content", action="store_true", help="Skip saving markdown")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -29,6 +34,8 @@ def main():
 
     if args.command == "youtube":
         _handle_youtube(args, config)
+    elif args.command == "webscrape":
+        _handle_webscrape(args, config)
 
 
 def _handle_youtube(args, config):
@@ -65,6 +72,30 @@ def _fetch_and_save(url: str, config: dict) -> dict:
     with open(folder / "metadata.json", "w") as f:
         json.dump(metadata_dict, f, indent=2)
     return metadata_dict
+
+
+def _handle_webscrape(args, config):
+    from .cache import generate_content_id
+
+    content_id = generate_content_id("webscrape", args.url)
+    if not args.force and is_cached(config["download_dir"], content_id):
+        print("Using cached metadata.", file=sys.stderr)
+        cached_path = content_dir(config["download_dir"], content_id) / "metadata.json"
+        with open(cached_path) as f:
+            metadata_dict = json.load(f)
+    else:
+        metadata = webscrape.fetch(args.url, config)
+        folder = content_dir(config["download_dir"], metadata.content_id)
+        metadata_dict = asdict(metadata)
+        with open(folder / "metadata.json", "w") as f:
+            json.dump(metadata_dict, f, indent=2)
+
+    if not args.no_content:
+        content_id = metadata_dict["content_id"]
+        webscrape.save_content(content_id, config, force=args.force)
+        metadata_dict["content_file"] = "content.md"
+
+    print(json.dumps(metadata_dict, indent=2))
 
 
 def _extract_video_id(url: str) -> str | None:
