@@ -9,6 +9,8 @@ dependencies = [
     "pyyaml",
     "podcastparser",
     "requests",
+    "nemo_toolkit[asr]",
+    "pydub",
 ]
 
 [project.scripts]

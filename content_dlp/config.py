@@ -13,6 +13,10 @@ DEFAULTS = {
         "jina_api_key": None,
         "timeout": 30,
     },
+    "transcribe": {
+        "model": "nvidia/parakeet-tdt-0.6b-v3",
+        "long_audio_threshold": 480,
+    },
 }
 
 SETTINGS_PATH = Path(__file__).parent.parent / "settings.yaml"

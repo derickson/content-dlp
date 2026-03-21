@@ -19,6 +19,7 @@ def main():
   %(prog)s podcast "https://feeds.example.com/podcast.xml"
   %(prog)s podcast --episodes 3 --no-audio "https://feeds.example.com/podcast.xml"
   %(prog)s webscrape "https://example.com/page"
+  %(prog)s transcribe /path/to/audio.mp3
 
 output:
   JSON is printed to stdout; status messages go to stderr.
@@ -42,7 +43,7 @@ caching:
     yt_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch everything")
     yt_parser.add_argument("--no-audio", action="store_true", help="Skip audio download (metadata only)")
     yt_parser.add_argument("--video", action="store_true", help="Download video (480p max, mp4)")
-    yt_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via GPU whisper service (requires audio)")
+    yt_parser.add_argument("--transcript", action="store_true", help="Transcribe audio locally via Parakeet TDT (requires audio)")
 
     pod_parser = sub.add_parser(
         "podcast",
@@ -53,7 +54,7 @@ caching:
     pod_parser.add_argument("--episodes", type=int, default=1, help="Number of most recent episodes to fetch (default: 1)")
     pod_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch everything")
     pod_parser.add_argument("--no-audio", action="store_true", help="Skip audio download (metadata only)")
-    pod_parser.add_argument("--transcript", action="store_true", help="Transcribe audio via GPU whisper service (requires audio)")
+    pod_parser.add_argument("--transcript", action="store_true", help="Transcribe audio locally via Parakeet TDT (requires audio)")
 
     ws_parser = sub.add_parser(
         "webscrape",
@@ -63,6 +64,15 @@ caching:
     ws_parser.add_argument("url", help="URL of the page to scrape")
     ws_parser.add_argument("--force", action="store_true", help="Bypass cache and re-fetch")
     ws_parser.add_argument("--no-content", action="store_true", help="Skip saving page markdown (metadata only)")
+
+    tr_parser = sub.add_parser(
+        "transcribe",
+        help="Transcribe a local audio file via Parakeet TDT",
+        description="Transcribe a local audio file and output JSON with text, segments, and word timestamps.",
+    )
+    tr_parser.add_argument("audio_file", help="Path to local audio file (mp3, wav, m4a, etc.)")
+    tr_parser.add_argument("--force", action="store_true", help="Bypass cache and re-transcribe")
+    tr_parser.add_argument("--output-dir", help="Directory to save transcript (default: same dir as audio file)")
 
     args = parser.parse_args()
     if not args.command:
@@ -79,6 +89,8 @@ caching:
         _handle_podcast(args, config)
     elif args.command == "webscrape":
         _handle_webscrape(args, config)
+    elif args.command == "transcribe":
+        _handle_transcribe(args, config)
 
 
 def _handle_youtube(args, config):
@@ -187,6 +199,25 @@ def _handle_webscrape(args, config):
         metadata_dict["content_file"] = "content.md"
 
     print(json.dumps(metadata_dict, indent=2))
+
+
+def _handle_transcribe(args, config):
+    from pathlib import Path
+    from .transcribe import transcribe
+
+    audio_path = Path(args.audio_file).resolve()
+    if not audio_path.exists():
+        print(f"Error: audio file not found: {audio_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.output_dir:
+        output_folder = Path(args.output_dir).resolve()
+        output_folder.mkdir(parents=True, exist_ok=True)
+    else:
+        output_folder = audio_path.parent
+
+    result = transcribe(audio_path, output_folder, force=args.force)
+    print(json.dumps(result, indent=2))
 
 
 def _extract_video_id(url: str) -> str | None:
