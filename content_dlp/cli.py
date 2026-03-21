@@ -195,8 +195,9 @@ def _handle_webscrape(args, config):
 
     if not args.no_content:
         content_id = metadata_dict["content_id"]
-        webscrape.save_content(content_id, config, force=args.force)
+        content_path = webscrape.save_content(content_id, config, force=args.force)
         metadata_dict["content_file"] = "content.md"
+        metadata_dict["markdown"] = content_path.read_text(encoding="utf-8")
 
     print(json.dumps(metadata_dict, indent=2))
 
