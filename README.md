@@ -4,7 +4,7 @@ CLI tool for AI agents to harvest context from web sources (YouTube, podcasts, w
 
 ## Setup
 
-Requires Python 3.12+ and ffmpeg. Transcript feature requires a GPU whisper service.
+Requires Python 3.12+ and ffmpeg. Transcript feature requires a CUDA-capable GPU (uses NVIDIA Parakeet TDT 0.6B v3 locally via NeMo toolkit).
 
 ```bash
 # Create venv and install
@@ -32,7 +32,7 @@ chmod +x content-dlp
 # Download video (480p max)
 ./content-dlp youtube --video "https://www.youtube.com/watch?v=VIDEO_ID"
 
-# Transcribe audio via GPU whisper service
+# Transcribe audio locally via Parakeet TDT
 ./content-dlp youtube --transcript "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Force re-fetch (bypass cache)
@@ -65,6 +65,18 @@ Podcast output is always a JSON array, even for a single episode.
 ```
 
 Uses the [Jina Reader API](https://jina.ai/reader/) to extract page content as markdown.
+
+### Transcribe (standalone)
+
+```bash
+# Transcribe a local audio file
+./content-dlp transcribe /path/to/audio.mp3
+
+# Specify output directory for transcript.json
+./content-dlp transcribe --output-dir /tmp/results /path/to/audio.mp3
+```
+
+Transcribes any audio file locally using NVIDIA Parakeet TDT 0.6B v3. Outputs JSON with full text, segments with timestamps, and word-level timestamps.
 
 ### General options
 
@@ -119,7 +131,7 @@ Each fetched item gets a folder under the download directory (default `~/content
 │   ├── source_metadata.json   # raw yt-dlp dump
 │   ├── audio.mp3              # downloaded audio
 │   ├── video.mp4              # downloaded video (--video)
-│   └── transcript.json        # whisper transcript (--transcript)
+│   └── transcript.json        # Parakeet TDT transcript (--transcript)
 ├── pod_0424974c6853/
 │   ├── metadata.json
 │   ├── source_metadata.json
@@ -149,6 +161,10 @@ podcast:
 webscrape:
   jina_api_key: null    # optional, for higher rate limits
   timeout: 30
+
+transcribe:
+  model: nvidia/parakeet-tdt-0.6b-v3
+  long_audio_threshold: 480  # seconds; uses local attention for audio longer than this
 ```
 
 Created with defaults on first run if missing. CLI `--download-dir` overrides the config value.
@@ -160,4 +176,4 @@ Created with defaults on first run if missing. CLI `--download-dir` overrides th
 .venv/bin/python -m pytest tests/ -v
 ```
 
-Tests hit real APIs (YouTube, NPR, Jina) — they require network access. Transcript tests also require the whisper service on `smaug:8100`.
+Tests hit real APIs (YouTube, NPR, Jina) — they require network access. Transcript tests require a CUDA-capable GPU with the Parakeet TDT model.
