@@ -67,25 +67,17 @@ class TestTranscribeYouTube:
         assert isinstance(data["transcript"]["text"], str)
         assert len(data["transcript"]["text"]) > 0
 
-    def test_transcript_has_segments(self):
+    def test_transcript_has_chunks(self):
         data = run_cli_json("youtube", "--transcript", VIDEO_URL)
-        segments = data["transcript"]["segments"]
-        assert isinstance(segments, list)
-        assert len(segments) > 0
-        for seg in segments:
-            assert "text" in seg
-            assert "start" in seg
-            assert "end" in seg
-
-    def test_transcript_has_words(self):
-        data = run_cli_json("youtube", "--transcript", VIDEO_URL)
-        words = data["transcript"]["words"]
-        assert isinstance(words, list)
-        assert len(words) > 0
-        for w in words:
-            assert "word" in w
-            assert "start" in w
-            assert "end" in w
+        chunks = data["transcript"]["chunks"]
+        assert isinstance(chunks, list)
+        assert len(chunks) > 0
+        for chunk in chunks:
+            assert "text" in chunk
+            assert "start" in chunk
+            assert "end" in chunk
+            assert isinstance(chunk["text"], str)
+            assert len(chunk["text"]) > 0
 
     def test_transcript_model_field(self):
         data = run_cli_json("youtube", "--transcript", VIDEO_URL)
@@ -125,8 +117,7 @@ class TestTranscribeSubcommand:
         )
         assert isinstance(data["text"], str)
         assert len(data["text"]) > 0
-        assert "segments" in data
-        assert "words" in data
+        assert "chunks" in data
 
     def test_transcribe_missing_file(self):
         result = run_cli("transcribe", "/nonexistent/audio.mp3")

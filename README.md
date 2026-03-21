@@ -76,7 +76,7 @@ Uses the [Jina Reader API](https://jina.ai/reader/) to extract page content as m
 ./content-dlp transcribe --output-dir /tmp/results /path/to/audio.mp3
 ```
 
-Transcribes any audio file locally using NVIDIA Parakeet TDT 0.6B v3. Outputs JSON with full text, segments with timestamps, and word-level timestamps.
+Transcribes any audio file locally using NVIDIA Parakeet TDT 0.6B v3. Outputs JSON with full text and timestamped chunks (~6-second intervals).
 
 ### General options
 
@@ -110,7 +110,14 @@ All sources output normalized JSON to stdout with a shared `ContentMetadata` sch
   "extras": { ... },
   "audio_file": "audio.mp3",
   "video_file": "video.mp4",
-  "transcript": { "text": "..." }
+  "transcript": {
+    "text": "full transcript...",
+    "chunks": [
+      {"text": "~6s of text...", "start": 0.0, "end": 5.92},
+      {"text": "next ~6s...", "start": 5.92, "end": 12.16}
+    ],
+    "model": "nvidia/parakeet-tdt-0.6b-v3"
+  }
 }
 ```
 

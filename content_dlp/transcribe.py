@@ -9,6 +9,7 @@ from pathlib import Path
 MODEL_NAME = "nvidia/parakeet-tdt-0.6b-v3"
 CHUNK_DURATION_SEC = 300  # 5 minutes per chunk to fit in GPU memory
 CHUNK_OVERLAP_SEC = 5  # overlap to avoid cutting words at boundaries
+TIMESTAMP_CHUNK_SEC = 6  # group words into ~6-second chunks for output
 
 _model = None
 
@@ -84,23 +85,49 @@ def _chunk_audio(audio_path: Path, content_folder: Path) -> list[tuple[Path, flo
     return chunks
 
 
+def _chunk_by_duration(words: list[dict], chunk_sec: float = TIMESTAMP_CHUNK_SEC) -> list[dict]:
+    """Group words into approximately chunk_sec-second chunks."""
+    if not words:
+        return []
+
+    chunks = []
+    current_words = []
+    chunk_start = None
+
+    for w in words:
+        if chunk_start is None:
+            chunk_start = w["start"]
+        current_words.append(w["word"])
+
+        if w["end"] - chunk_start >= chunk_sec:
+            chunks.append({
+                "text": " ".join(current_words),
+                "start": chunk_start,
+                "end": w["end"],
+            })
+            current_words = []
+            chunk_start = None
+
+    if current_words:
+        chunks.append({
+            "text": " ".join(current_words),
+            "start": chunk_start,
+            "end": words[-1]["end"],
+        })
+
+    return chunks
+
+
 def _transcribe_single(model, wav_path: str) -> dict:
     """Transcribe a single audio file and return hypothesis data."""
     with _redirect_stdout_to_stderr():
         output = model.transcribe([wav_path], timestamps=True)
     hyp = output[0]
 
-    segments = []
     words = []
 
     if hasattr(hyp, "timestamp") and hyp.timestamp is not None:
         ts = hyp.timestamp
-        for seg in ts.get("segment", []):
-            segments.append({
-                "text": seg["segment"],
-                "start": seg["start"],
-                "end": seg["end"],
-            })
         for w in ts.get("word", []):
             words.append({
                 "word": w["word"],
@@ -108,7 +135,7 @@ def _transcribe_single(model, wav_path: str) -> dict:
                 "end": w["end"],
             })
 
-    return {"text": hyp.text, "segments": segments, "words": words}
+    return {"text": hyp.text, "words": words}
 
 
 def _merge_chunk_results(chunk_results: list[tuple[dict, float]]) -> dict:
@@ -117,7 +144,6 @@ def _merge_chunk_results(chunk_results: list[tuple[dict, float]]) -> dict:
         return chunk_results[0][0]
 
     all_text = []
-    all_segments = []
     all_words = []
 
     for i, (result, offset) in enumerate(chunk_results):
@@ -143,22 +169,8 @@ def _merge_chunk_results(chunk_results: list[tuple[dict, float]]) -> dict:
                             "start": round(w["start"] + offset, 3),
                             "end": round(w["end"] + offset, 3),
                         })
-                # Similarly trim segments
-                for seg in result["segments"]:
-                    if seg["end"] > overlap_cutoff:
-                        all_segments.append({
-                            "text": seg["text"],
-                            "start": round(max(seg["start"], overlap_cutoff) + offset, 3),
-                            "end": round(seg["end"] + offset, 3),
-                        })
             else:
                 all_text.append(result["text"])
-                for seg in result["segments"]:
-                    all_segments.append({
-                        "text": seg["text"],
-                        "start": round(seg["start"] + offset, 3),
-                        "end": round(seg["end"] + offset, 3),
-                    })
                 for w in result["words"]:
                     all_words.append({
                         "word": w["word"],
@@ -168,7 +180,6 @@ def _merge_chunk_results(chunk_results: list[tuple[dict, float]]) -> dict:
 
     return {
         "text": " ".join(all_text),
-        "segments": all_segments,
         "words": all_words,
     }
 
@@ -217,8 +228,7 @@ def transcribe(audio_path: Path, content_folder: Path, force: bool = False) -> d
 
         result = {
             "text": merged["text"],
-            "segments": merged["segments"],
-            "words": merged["words"],
+            "chunks": _chunk_by_duration(merged["words"]),
             "model": MODEL_NAME,
         }
 

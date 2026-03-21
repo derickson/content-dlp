@@ -64,8 +64,8 @@ cli.py            argparse entry point, subcommand dispatch, cache check, JSON o
 **Data flow for `transcribe` subcommand:**
 1. Resolve audio file path, verify it exists
 2. If `--output-dir` specified, use that; otherwise use audio file's parent directory
-3. Call `transcribe()` → preprocesses to 16kHz mono WAV, runs Parakeet TDT, caches as `transcript.json`
-4. Print JSON to stdout (text, segments with timestamps, words with timestamps, model name)
+3. Call `transcribe()` → preprocesses to 16kHz mono WAV, runs Parakeet TDT, post-processes into ~6-second chunks, caches as `transcript.json`
+4. Print JSON to stdout (text, chunks with timestamps, model name)
 
 **Data flow for `podcast` subcommand:**
 1. Fetch and parse RSS feed with `podcastparser`
@@ -88,7 +88,7 @@ cli.py            argparse entry point, subcommand dispatch, cache check, JSON o
 - **Stdout/stderr separation:** JSON output goes to stdout only. All progress/status messages use `print(..., file=sys.stderr)`. This is critical for piping.
 - **File-presence caching:** No database. Each content item gets a folder (`~/content-dlp-data/yt_VIDEO_ID/`). Metadata is cached if `metadata.json` exists; audio is cached if `audio.*` exists; video if `video.*` exists; transcript if `transcript.json` exists. `--force` bypasses all.
 - **Content IDs:** YouTube uses native video ID (`yt_dQw4w9WgXcQ`). Podcast episodes hash the episode GUID (`pod_0424974c6853`). Webscrape hashes the URL (`web_a1b2c3d4e5f6`).
-- **Transcription:** Shared `transcribe.py` module used by youtube, podcast, and standalone `transcribe` subcommand. Uses NVIDIA Parakeet TDT 0.6B v3 model via NeMo toolkit for local GPU transcription. Preprocesses audio to 16kHz mono WAV via pydub, uses local attention for audio >8min. Caches result as `transcript.json`. Requires CUDA-capable GPU.
+- **Transcription:** Shared `transcribe.py` module used by youtube, podcast, and standalone `transcribe` subcommand. Uses NVIDIA Parakeet TDT 0.6B v3 model via NeMo toolkit for local GPU transcription. Preprocesses audio to 16kHz mono WAV via pydub, uses local attention for audio >8min. Post-processes word-level timestamps into ~6-second chunks. Caches result as `transcript.json`. Requires CUDA-capable GPU.
 - **yt-dlp as Python library:** Not invoked via subprocess. Uses `yt_dlp.YoutubeDL` directly with quiet mode and a custom logger that only surfaces errors to stderr.
 - **Shell wrapper + `__main__.py`:** The `content-dlp` bash script finds the venv at `~/.venvs/content-dlp` and runs `python -m content_dlp`. The venv is symlinked as `.venv` in the project root.
 
