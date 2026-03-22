@@ -104,7 +104,7 @@ Exposes the same functionality as the CLI over HTTP, useful when callers (e.g. D
 | `POST` | `/youtube` | `url`, `no_audio?`, `video?`, `transcript?`, `force?` |
 | `POST` | `/podcast` | `url`, `episodes?`, `no_audio?`, `transcript?`, `force?` |
 | `POST` | `/webscrape` | `url`, `no_content?`, `force?` |
-| `POST` | `/transcribe` | `file_path`, `force?`, `output_dir?` |
+| `POST` | `/transcribe` | `file_path` or `audio_url`, `force?`, `output_dir?` |
 
 ```bash
 # Example: scrape a page from a Docker container

@@ -168,3 +168,78 @@ class TestServerTranscribe:
         )
         assert resp.status_code in (400, 500)
         assert "error" in resp.json()
+
+    def test_transcribe_missing_both_returns_400(self, server_available):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={},
+            timeout=30,
+        )
+        assert resp.status_code == 400
+        assert "error" in resp.json()
+
+
+class TestServerTranscribeAudioUrl:
+
+    @pytest.fixture(scope="class")
+    def audio_url(self, server_available):
+        """Get a real audio URL from the podcast endpoint."""
+        resp = requests.post(
+            f"{SERVER_URL}/podcast",
+            json={"url": "https://feeds.npr.org/510289/podcast.xml", "no_audio": True},
+            timeout=120,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) > 0
+        url = data[0]["extras"].get("enclosure_url")
+        assert url, "No enclosure_url in podcast episode"
+        return url
+
+    def test_transcribe_audio_url_returns_valid_json(self, server_available, audio_url):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"audio_url": audio_url, "force": True},
+            timeout=600,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+
+    def test_transcribe_audio_url_has_text(self, server_available, audio_url):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"audio_url": audio_url},
+            timeout=600,
+        )
+        data = resp.json()
+        assert isinstance(data["text"], str)
+        assert len(data["text"]) > 0
+
+    def test_transcribe_audio_url_has_chunks(self, server_available, audio_url):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"audio_url": audio_url},
+            timeout=600,
+        )
+        data = resp.json()
+        assert isinstance(data["chunks"], list)
+        assert len(data["chunks"]) > 0
+
+    def test_transcribe_audio_url_has_model(self, server_available, audio_url):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"audio_url": audio_url},
+            timeout=600,
+        )
+        data = resp.json()
+        assert data["model"] == "nvidia/parakeet-tdt-0.6b-v3"
+
+    def test_transcribe_bad_url_returns_error(self, server_available):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"audio_url": "https://example.com/nonexistent.mp3"},
+            timeout=30,
+        )
+        assert resp.status_code in (400, 500)
+        assert "error" in resp.json()
