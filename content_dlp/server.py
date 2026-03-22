@@ -80,6 +80,11 @@ def create_app(config: dict) -> Flask:
 def _transcribe_from_url(audio_url, body, config):
     """Download remote audio to a temp file, transcribe, then clean up."""
     import sys
+    from .cache import generate_content_id, content_dir
+
+    # Generate a unique output dir per audio URL for proper caching
+    content_id = generate_content_id("podcast", audio_url)
+    output = str(content_dir(config["download_dir"], f"{content_id}_transcript"))
 
     suffix = Path(audio_url.split("?")[0]).suffix or ".mp3"
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
@@ -96,7 +101,7 @@ def _transcribe_from_url(audio_url, body, config):
         args = SimpleNamespace(
             audio_file=str(tmp_path),
             force=body.get("force", False),
-            output_dir=body.get("output_dir"),
+            output_dir=output,
         )
         return _run(_handle_transcribe, args, config)
     except http_requests.RequestException as e:
