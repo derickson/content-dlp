@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -10,8 +11,7 @@ MODEL_NAME = "nvidia/parakeet-tdt-0.6b-v3"
 CHUNK_DURATION_SEC = 300  # 5 minutes per chunk to fit in GPU memory
 CHUNK_OVERLAP_SEC = 5  # overlap to avoid cutting words at boundaries
 TIMESTAMP_CHUNK_SEC = 6  # group words into ~6-second chunks for output
-
-_model = None
+MODEL_UNLOAD_DELAY_SEC = 10  # seconds of idle before unloading model from VRAM
 
 
 @contextmanager
@@ -30,19 +30,64 @@ def _redirect_stdout_to_stderr():
         nemo_logger.setLevel(old_level)
 
 
-def _get_model():
-    """Lazy-load the Parakeet TDT model on first use."""
-    global _model
-    if _model is not None:
-        return _model
+class _ModelManager:
+    """Thread-safe model manager with reference counting and auto-unload."""
 
-    print("Loading Parakeet TDT model (first run may download weights)...", file=sys.stderr)
-    with _redirect_stdout_to_stderr():
-        import nemo.collections.asr as nemo_asr
-        _model = nemo_asr.models.ASRModel.from_pretrained(model_name=MODEL_NAME)
-    _model.eval()
-    print("Model loaded.", file=sys.stderr)
-    return _model
+    def __init__(self, unload_delay=MODEL_UNLOAD_DELAY_SEC):
+        self._model = None
+        self._lock = threading.Lock()
+        self._ref_count = 0
+        self._unload_timer = None
+        self._unload_delay = unload_delay
+
+    def acquire(self):
+        with self._lock:
+            if self._unload_timer:
+                self._unload_timer.cancel()
+                self._unload_timer = None
+            if self._model is None:
+                self._load()
+            self._ref_count += 1
+            return self._model
+
+    def release(self):
+        with self._lock:
+            self._ref_count -= 1
+            if self._ref_count == 0:
+                self._unload_timer = threading.Timer(self._unload_delay, self._unload)
+                self._unload_timer.daemon = True
+                self._unload_timer.start()
+
+    def _load(self):
+        print("Loading Parakeet TDT model (first run may download weights)...", file=sys.stderr)
+        with _redirect_stdout_to_stderr():
+            import nemo.collections.asr as nemo_asr
+            self._model = nemo_asr.models.ASRModel.from_pretrained(model_name=MODEL_NAME)
+        self._model.eval()
+        print("Model loaded.", file=sys.stderr)
+
+    def _unload(self):
+        with self._lock:
+            if self._ref_count == 0 and self._model is not None:
+                print("Unloading Parakeet TDT model (idle timeout)...", file=sys.stderr)
+                del self._model
+                self._model = None
+                import torch
+                torch.cuda.empty_cache()
+                print("Model unloaded, VRAM freed.", file=sys.stderr)
+
+
+_manager = _ModelManager()
+
+
+@contextmanager
+def _get_model():
+    """Acquire the model for use, auto-releases when done."""
+    model = _manager.acquire()
+    try:
+        yield model
+    finally:
+        _manager.release()
 
 
 def _prepare_audio(audio_path: Path, content_folder: Path) -> tuple[Path, float]:
@@ -207,24 +252,23 @@ def transcribe(audio_path: Path, content_folder: Path, force: bool = False) -> d
 
     temp_files = [wav_path]
     try:
-        model = _get_model()
+        with _get_model() as model:
+            if duration_sec <= CHUNK_DURATION_SEC:
+                print("Transcribing audio (this may take a while)...", file=sys.stderr)
+                merged = _transcribe_single(model, str(wav_path))
+            else:
+                # Chunk long audio to avoid GPU OOM
+                print(f"Long audio ({duration_sec:.0f}s) — splitting into {CHUNK_DURATION_SEC}s chunks...", file=sys.stderr)
+                chunks = _chunk_audio(wav_path, content_folder)
+                temp_files.extend(path for path, _ in chunks if path != wav_path)
 
-        if duration_sec <= CHUNK_DURATION_SEC:
-            print("Transcribing audio (this may take a while)...", file=sys.stderr)
-            merged = _transcribe_single(model, str(wav_path))
-        else:
-            # Chunk long audio to avoid GPU OOM
-            print(f"Long audio ({duration_sec:.0f}s) — splitting into {CHUNK_DURATION_SEC}s chunks...", file=sys.stderr)
-            chunks = _chunk_audio(wav_path, content_folder)
-            temp_files.extend(path for path, _ in chunks if path != wav_path)
+                chunk_results = []
+                for i, (chunk_path, offset) in enumerate(chunks):
+                    print(f"Transcribing chunk {i + 1}/{len(chunks)}...", file=sys.stderr)
+                    result = _transcribe_single(model, str(chunk_path))
+                    chunk_results.append((result, offset))
 
-            chunk_results = []
-            for i, (chunk_path, offset) in enumerate(chunks):
-                print(f"Transcribing chunk {i + 1}/{len(chunks)}...", file=sys.stderr)
-                result = _transcribe_single(model, str(chunk_path))
-                chunk_results.append((result, offset))
-
-            merged = _merge_chunk_results(chunk_results)
+                merged = _merge_chunk_results(chunk_results)
 
         result = {
             "text": merged["text"],
