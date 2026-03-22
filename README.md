@@ -258,6 +258,12 @@ webscrape:
 transcribe:
   model: nvidia/parakeet-tdt-0.6b-v3
   long_audio_threshold: 480  # seconds; uses local attention for audio longer than this
+
+cleanup:
+  media_max_age_days: 30     # delete audio/video files older than this
+  metadata_max_age_days: 365 # delete entire content directories older than this
+  run_on_startup: true       # auto-run cleanup when server starts
+  dry_run: false             # log what would be deleted without deleting
 ```
 
 Created with defaults on first run if missing. CLI `--download-dir` overrides the config value.
