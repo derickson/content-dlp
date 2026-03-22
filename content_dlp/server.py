@@ -17,6 +17,11 @@ from .cli import (
 def create_app(config: dict) -> Flask:
     app = Flask(__name__)
 
+    cleanup_config = config.get("cleanup", {})
+    if cleanup_config.get("run_on_startup", True):
+        from .cleanup import cleanup
+        cleanup(config["download_dir"], cleanup_config)
+
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"})

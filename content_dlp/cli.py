@@ -82,6 +82,15 @@ caching:
     serve_parser.add_argument("--port", type=int, default=7055, help="Port to listen on (default: 7055)")
     serve_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
 
+    cleanup_parser = sub.add_parser(
+        "cleanup",
+        help="Remove stale cached audio/video files and old content directories",
+        description="Age-based cache cleanup. Deletes media files older than media-max-age days and entire directories older than metadata-max-age days.",
+    )
+    cleanup_parser.add_argument("--dry-run", action="store_true", help="Show what would be deleted without deleting")
+    cleanup_parser.add_argument("--media-max-age", type=int, help="Override media_max_age_days from settings")
+    cleanup_parser.add_argument("--metadata-max-age", type=int, help="Override metadata_max_age_days from settings")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -104,6 +113,8 @@ caching:
             result = _handle_webscrape(args, config)
         elif args.command == "transcribe":
             result = _handle_transcribe(args, config)
+        elif args.command == "cleanup":
+            result = _handle_cleanup(args, config)
         print(json.dumps(result, indent=2))
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -231,6 +242,19 @@ def _handle_transcribe(args, config):
         output_folder = audio_path.parent
 
     return transcribe(audio_path, output_folder, force=args.force)
+
+
+def _handle_cleanup(args, config):
+    from .cleanup import cleanup
+
+    cleanup_config = dict(config.get("cleanup", {}))
+    if args.dry_run:
+        cleanup_config["dry_run"] = True
+    if args.media_max_age is not None:
+        cleanup_config["media_max_age_days"] = args.media_max_age
+    if args.metadata_max_age is not None:
+        cleanup_config["metadata_max_age_days"] = args.metadata_max_age
+    return cleanup(config["download_dir"], cleanup_config)
 
 
 def _handle_serve(args, config):

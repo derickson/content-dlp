@@ -78,6 +78,31 @@ Uses the [Jina Reader API](https://jina.ai/reader/) to extract page content as m
 
 Transcribes any audio file locally using NVIDIA Parakeet TDT 0.6B v3. Outputs JSON with full text and timestamped chunks (~6-second intervals).
 
+### Cleanup
+
+```bash
+# Preview what would be deleted
+./content-dlp cleanup --dry-run
+
+# Run cleanup with default settings (30 days for media, 365 for metadata)
+./content-dlp cleanup
+
+# Override retention periods
+./content-dlp cleanup --media-max-age 7 --metadata-max-age 90
+```
+
+Removes stale cached files to prevent unbounded disk growth. Media files (audio, video) are deleted after 30 days by default; entire content directories after 365 days. Metadata and transcripts are small and kept longer.
+
+The server runs cleanup automatically on startup. Configure in `settings.yaml`:
+
+```yaml
+cleanup:
+  media_max_age_days: 30
+  metadata_max_age_days: 365
+  run_on_startup: true
+  dry_run: false
+```
+
 ### HTTP Server
 
 ```bash

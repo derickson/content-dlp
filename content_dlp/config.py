@@ -17,6 +17,12 @@ DEFAULTS = {
         "model": "nvidia/parakeet-tdt-0.6b-v3",
         "long_audio_threshold": 480,
     },
+    "cleanup": {
+        "media_max_age_days": 30,
+        "metadata_max_age_days": 365,
+        "run_on_startup": True,
+        "dry_run": False,
+    },
 }
 
 SETTINGS_PATH = Path(__file__).parent.parent / "settings.yaml"
