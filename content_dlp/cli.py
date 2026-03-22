@@ -74,6 +74,14 @@ caching:
     tr_parser.add_argument("--force", action="store_true", help="Bypass cache and re-transcribe")
     tr_parser.add_argument("--output-dir", help="Directory to save transcript (default: same dir as audio file)")
 
+    serve_parser = sub.add_parser(
+        "serve",
+        help="Start HTTP server for REST API access",
+        description="Run a lightweight HTTP server exposing content-dlp as a REST API.",
+    )
+    serve_parser.add_argument("--port", type=int, default=7055, help="Port to listen on (default: 7055)")
+    serve_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -83,14 +91,23 @@ caching:
     if args.download_dir:
         config["download_dir"] = args.download_dir
 
-    if args.command == "youtube":
-        _handle_youtube(args, config)
-    elif args.command == "podcast":
-        _handle_podcast(args, config)
-    elif args.command == "webscrape":
-        _handle_webscrape(args, config)
-    elif args.command == "transcribe":
-        _handle_transcribe(args, config)
+    if args.command == "serve":
+        _handle_serve(args, config)
+        return
+
+    try:
+        if args.command == "youtube":
+            result = _handle_youtube(args, config)
+        elif args.command == "podcast":
+            result = _handle_podcast(args, config)
+        elif args.command == "webscrape":
+            result = _handle_webscrape(args, config)
+        elif args.command == "transcribe":
+            result = _handle_transcribe(args, config)
+        print(json.dumps(result, indent=2))
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _handle_youtube(args, config):
@@ -119,8 +136,7 @@ def _handle_youtube(args, config):
     # Transcribe audio if requested
     if args.transcript:
         if args.no_audio:
-            print("Error: --transcript requires audio (cannot use with --no-audio)", file=sys.stderr)
-            sys.exit(1)
+            raise ValueError("--transcript requires audio (cannot use with --no-audio)")
         from .transcribe import transcribe
         content_id = metadata_dict["content_id"]
         folder = content_dir(config["download_dir"], content_id)
@@ -133,8 +149,7 @@ def _handle_youtube(args, config):
         video_path = youtube.download_video(content_id, args.url, config, force=args.force)
         metadata_dict["video_file"] = video_path.name
 
-    # Output JSON to stdout
-    print(json.dumps(metadata_dict, indent=2))
+    return metadata_dict
 
 
 def _fetch_and_save(url: str, config: dict) -> dict:
@@ -165,8 +180,7 @@ def _handle_podcast(args, config):
 
         if args.transcript:
             if args.no_audio or "audio_file" not in metadata_dict:
-                print("Error: --transcript requires audio", file=sys.stderr)
-                sys.exit(1)
+                raise ValueError("--transcript requires audio")
             from .transcribe import transcribe
             folder = content_dir(config["download_dir"], metadata.content_id)
             transcript = transcribe(audio_path, folder, force=args.force)
@@ -174,7 +188,7 @@ def _handle_podcast(args, config):
 
         episodes.append(metadata_dict)
 
-    print(json.dumps(episodes, indent=2))
+    return episodes
 
 
 def _handle_webscrape(args, config):
@@ -199,7 +213,7 @@ def _handle_webscrape(args, config):
         metadata_dict["content_file"] = "content.md"
         metadata_dict["markdown"] = content_path.read_text(encoding="utf-8")
 
-    print(json.dumps(metadata_dict, indent=2))
+    return metadata_dict
 
 
 def _handle_transcribe(args, config):
@@ -208,8 +222,7 @@ def _handle_transcribe(args, config):
 
     audio_path = Path(args.audio_file).resolve()
     if not audio_path.exists():
-        print(f"Error: audio file not found: {audio_path}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"audio file not found: {audio_path}")
 
     if args.output_dir:
         output_folder = Path(args.output_dir).resolve()
@@ -217,8 +230,15 @@ def _handle_transcribe(args, config):
     else:
         output_folder = audio_path.parent
 
-    result = transcribe(audio_path, output_folder, force=args.force)
-    print(json.dumps(result, indent=2))
+    return transcribe(audio_path, output_folder, force=args.force)
+
+
+def _handle_serve(args, config):
+    from .server import create_app
+
+    app = create_app(config)
+    print(f"Starting content-dlp server on {args.host}:{args.port}", file=sys.stderr)
+    app.run(host=args.host, port=args.port, threaded=True)
 
 
 def _extract_video_id(url: str) -> str | None:

@@ -78,6 +78,66 @@ Uses the [Jina Reader API](https://jina.ai/reader/) to extract page content as m
 
 Transcribes any audio file locally using NVIDIA Parakeet TDT 0.6B v3. Outputs JSON with full text and timestamped chunks (~6-second intervals).
 
+### HTTP Server
+
+```bash
+# Start the REST API server (default port 7055)
+./content-dlp serve
+
+# Custom port and host
+./content-dlp serve --port 8080 --host 127.0.0.1
+
+# Run in the background
+./content-dlp serve &
+
+# Stop the server (foreground: Ctrl+C, background: kill by port)
+kill $(lsof -t -i:7055)
+```
+
+Exposes the same functionality as the CLI over HTTP, useful when callers (e.g. Docker containers) can't invoke the CLI directly.
+
+**Endpoints:**
+
+| Method | Path | Body fields |
+|--------|------|-------------|
+| `GET` | `/health` | — |
+| `POST` | `/youtube` | `url`, `no_audio?`, `video?`, `transcript?`, `force?` |
+| `POST` | `/podcast` | `url`, `episodes?`, `no_audio?`, `transcript?`, `force?` |
+| `POST` | `/webscrape` | `url`, `no_content?`, `force?` |
+| `POST` | `/transcribe` | `file_path`, `force?`, `output_dir?` |
+
+```bash
+# Example: scrape a page from a Docker container
+curl -X POST http://host.docker.internal:7055/webscrape \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com/page"}'
+
+# Example: transcribe a file on the host
+curl -X POST http://localhost:7055/transcribe \
+  -H 'Content-Type: application/json' \
+  -d '{"file_path": "/home/user/audio.mp3"}'
+```
+
+Responses are the same JSON as the CLI output. Errors return `{"error": "..."}` with appropriate HTTP status codes (400 for validation errors, 500 for server errors).
+
+**Install as a systemd service** (auto-start on boot, auto-restart on crash):
+
+```bash
+# Install and enable the service
+sudo cp content-dlp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable content-dlp
+sudo systemctl start content-dlp
+
+# Check status and logs
+sudo systemctl status content-dlp
+journalctl -u content-dlp -f
+
+# Restart / stop
+sudo systemctl restart content-dlp
+sudo systemctl stop content-dlp
+```
+
 ### General options
 
 ```bash
@@ -126,6 +186,7 @@ Optional fields by flag:
 - `video_file` — included with `--video` (youtube only)
 - `transcript` — included with `--transcript` (youtube, podcast)
 - `content_file` — included by default for webscrape (omitted with `--no-content`)
+- `markdown` — full page text, included by default for webscrape (omitted with `--no-content`)
 
 ## Storage
 

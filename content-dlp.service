@@ -1,0 +1,15 @@
+[Unit]
+Description=content-dlp REST API server
+After=network.target
+
+[Service]
+Type=simple
+User=dave
+WorkingDirectory=/home/dave/dev/content-dlp
+ExecStart=/home/dave/.venvs/content-dlp/bin/python -m content_dlp serve --port 7055
+Restart=always
+RestartSec=5
+Environment=HOME=/home/dave
+
+[Install]
+WantedBy=multi-user.target
