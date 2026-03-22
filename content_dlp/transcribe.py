@@ -70,9 +70,13 @@ class _ModelManager:
         with self._lock:
             if self._ref_count == 0 and self._model is not None:
                 print("Unloading Parakeet TDT model (idle timeout)...", file=sys.stderr)
+                import gc
+                import torch
+                self._model.to("cpu")
                 del self._model
                 self._model = None
-                import torch
+                gc.collect()
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
                 print("Model unloaded, VRAM freed.", file=sys.stderr)
 

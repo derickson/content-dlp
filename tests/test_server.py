@@ -1,10 +1,14 @@
 """Integration test: verify the content-dlp HTTP server is running on port 7055."""
 
+from pathlib import Path
+
 import pytest
 import requests
 
 SERVER_URL = "http://localhost:7055"
 PAGE_URL = "https://azathought.com/community-gaming/"
+VIDEO_URL = "https://www.youtube.com/watch?v=yLUKVHH3X8I"
+CONTENT_ID = "yt_yLUKVHH3X8I"
 
 
 @pytest.fixture(scope="module")
@@ -92,3 +96,75 @@ class TestServerWebscrape:
         data = resp.json()
         assert "markdown" not in data
         assert "content_file" not in data
+
+
+class TestServerTranscribe:
+
+    @pytest.fixture(scope="class")
+    def audio_file_path(self, server_available):
+        """Ensure audio exists by fetching via /youtube, return the audio file path."""
+        resp = requests.post(
+            f"{SERVER_URL}/youtube",
+            json={"url": VIDEO_URL},
+            timeout=600,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # Resolve audio path from server's download dir
+        from content_dlp.config import load_config
+        download_dir = Path(load_config()["download_dir"])
+        audio_path = download_dir / data["content_id"] / data["audio_file"]
+        assert audio_path.exists(), f"Audio file not found: {audio_path}"
+        return str(audio_path)
+
+    def test_transcribe_returns_valid_json(self, server_available, audio_file_path):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"file_path": audio_file_path},
+            timeout=600,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, dict)
+
+    def test_transcribe_has_text(self, server_available, audio_file_path):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"file_path": audio_file_path},
+            timeout=600,
+        )
+        data = resp.json()
+        assert isinstance(data["text"], str)
+        assert len(data["text"]) > 0
+
+    def test_transcribe_has_chunks(self, server_available, audio_file_path):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"file_path": audio_file_path},
+            timeout=600,
+        )
+        data = resp.json()
+        assert isinstance(data["chunks"], list)
+        assert len(data["chunks"]) > 0
+        for chunk in data["chunks"]:
+            assert "text" in chunk
+            assert "start" in chunk
+            assert "end" in chunk
+
+    def test_transcribe_has_model(self, server_available, audio_file_path):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"file_path": audio_file_path},
+            timeout=600,
+        )
+        data = resp.json()
+        assert data["model"] == "nvidia/parakeet-tdt-0.6b-v3"
+
+    def test_transcribe_missing_file_returns_error(self, server_available):
+        resp = requests.post(
+            f"{SERVER_URL}/transcribe",
+            json={"file_path": "/nonexistent/audio.mp3"},
+            timeout=30,
+        )
+        assert resp.status_code in (400, 500)
+        assert "error" in resp.json()
